@@ -46,7 +46,9 @@ class PetController extends Controller
      *             @OA\Property(property="name", type="string", description="Name of the pet"),
      *             @OA\Property(property="status", type="string", description="Status of the pet"),
      *             @OA\Property(property="photoUrls", type="array", @OA\Items(type="string"), description="List of photo URLs"),
-     *             @OA\Property(property="tags", type="array", @OA\Items(ref="#/components/schemas/Tag"), description="List of tags")
+                    @OA\Property(property="tags", type="object",
+     *                   @OA\Property(property="id", type="integer", description="ID of the tag"),
+     *               ),
      *         )
      *     ),
      *     @OA\Response(
@@ -81,7 +83,9 @@ class PetController extends Controller
         }
 
         if ($request->has('tags')) {
-            $pet->tags()->attach($request->tags);
+            $tagIds = $request->tags;
+            $existingTagIds = Tag::whereIn('id', $tagIds)->pluck('id')->toArray();
+            $pet->tags()->attach($existingTagIds);
         }
 
         return response()->json($pet->load('category', 'tags', 'photoUrls'), 201);
@@ -138,7 +142,9 @@ class PetController extends Controller
      *             @OA\Property(property="name", type="string", description="Name of the pet"),
      *             @OA\Property(property="status", type="string", description="Status of the pet"),
      *             @OA\Property(property="photoUrls", type="array", @OA\Items(type="string"), description="List of photo URLs"),
-     *             @OA\Property(property="tags", type="array", @OA\Items(ref="#/components/schemas/Tag"), description="List of tags")
+     *             @OA\Property(property="tags", type="object",
+     *                  @OA\Property(property="id", type="integer", description="ID of the tag"),
+     *              ),
      *         )
      *     ),
      *     @OA\Response(
@@ -211,7 +217,7 @@ class PetController extends Controller
 
     /**
      * @OA\Get(
-     *     path="/api/pets/status",
+     *     path="/api/pets/findByStatus",
      *     summary="Find pets by status",
      *     tags={"Pets"},
      *     @OA\Parameter(
@@ -225,13 +231,37 @@ class PetController extends Controller
      *         response=200,
      *         description="Successful operation",
      *         @OA\JsonContent(type="array", @OA\Items(ref="#/components/schemas/Pet"))
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Invalid status parameter",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Status query parameter is required")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="No pets found for the given status",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="No pets found")
+     *         )
      *     )
      * )
      */
     public function findByStatus(Request $request)
     {
         $status = $request->query('status');
-        $pets = Pet::with('category', 'tags', 'photoUrls')->where('status', $status)->get();
+
+        if (empty($status)) {
+            return response()->json(['error' => 'Status query parameter is required'], 400);
+        }
+
+        $pets = Pet::where('status', $status)->get();
+
+        if ($pets->isEmpty()) {
+            return response()->json(['error' => 'No pets found'], 404);
+        }
+
         return response()->json($pets);
     }
 
